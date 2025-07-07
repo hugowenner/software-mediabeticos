@@ -51,6 +51,20 @@ class Database:
         )
         self.conn.commit()
 
+    def delete_entry(self, date: str, meal: str):
+        """
+        Deleta uma entrada de refeição específica para uma dada data.
+        Usado para remover lanches extras que foram esvaziados/removidos da UI.
+        """
+        self.conn.execute(
+            """
+            DELETE FROM entries
+            WHERE date = ? AND meal = ?
+            """,
+            (date, meal),
+        )
+        self.conn.commit()
+
     def upsert_glargina_dose(self, date: str, dose: float):
         self.conn.execute(
             """

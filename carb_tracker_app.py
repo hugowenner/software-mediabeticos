@@ -25,6 +25,9 @@ class CarbTrackerApp(tk.Tk):
 
         self.service = CarbTrackerService(db_path=DB_FILE, config_path=CONFIG_FILE)
 
+        # Temas disponíveis
+        self.available_themes = ["clam", "alt", "default", "vista", "xpnative"] # Adicione ou remova temas conforme o ttk suporta
+
         self._configure_styles()
         self._set_fonts()
 
@@ -32,6 +35,9 @@ class CarbTrackerApp(tk.Tk):
         self.notebook.pack(expand=True, fill="both")
 
         self._create_tabs()
+
+        # Carregar o tema salvo ou o padrão ao iniciar
+        self.load_theme_from_config()
 
         self.after(100, lambda: self.daily_entry_tab_instance.load_day_data(dt.date.today().isoformat()))
 
@@ -47,6 +53,8 @@ class CarbTrackerApp(tk.Tk):
             "border": "#E0E0E0",
             "error": "#F44336",
             "success": "#4CAF50",
+            "warning_color": "#FF9800", # Adicionado para o status de backup
+            "text_secondary": "#757575", # Adicionado para o status de backup
             "date_nav_bg": "#E8F5E9",
             "glargina_bg": "#E3F2FD",
             "meal_row_bg": "#FFFFFF",
@@ -59,7 +67,7 @@ class CarbTrackerApp(tk.Tk):
 
         style = ttk.Style(self)
         self.style = style
-        self.style.theme_use("clam")
+        # self.style.theme_use("clam") # Removido para permitir o carregamento do tema via configuração
 
         style.configure(".", font=("Helvetica", 10), background=self.colors["bg"], foreground=self.colors["text_dark"])
         style.configure("TFrame", background=self.colors["bg"])
@@ -149,6 +157,7 @@ class CarbTrackerApp(tk.Tk):
                   background=[("active", self.colors["primary"])])
         style.layout("Treeview.Row",
                      [('Treeview.row', {'children': [('Treeview.padding', {'children': [('Treeview.treearea', {'sticky': 'nswe'})], 'sticky': 'nswe'})], 'sticky': 'nswe'})])
+        style.configure("Totals.TLabel", background=self.colors["panel_bg"], foreground=self.colors["text_dark"], font=("Helvetica", 10), padding=10) # Estilo adicionado para o label de totais
 
 
     def _set_fonts(self):
@@ -181,22 +190,47 @@ class CarbTrackerApp(tk.Tk):
         self.settings_tab_instance = SettingsTabUI(self.notebook, self.service, self)
         self.notebook.add(self.settings_tab_instance, text="Configurações")
 
+    def load_theme_from_config(self):
+        """Carrega o tema salvo no arquivo de configuração e o aplica."""
+        saved_theme = self.service.get_config("app_theme", "clam") # 'clam' como padrão se não houver tema salvo
+        self.apply_theme(saved_theme)
 
-    def load_day_data_with_confirmation(self, date_iso: str):
+    def apply_theme(self, theme_name: str):
+        """Aplica o tema ttk especificado."""
+        if theme_name in self.style.theme_names():
+            self.style.theme_use(theme_name)
+            # Reconfigurar estilos customizados após a mudança de tema, se necessário.
+            # Isso garante que cores e fontes que dependem de nossos 'colors' dict sejam aplicadas.
+            self._configure_styles()
+        else:
+            messagebox.showwarning("Tema Inválido", f"O tema '{theme_name}' não é suportado pelo ttk. Usando o tema padrão.")
+            self.style.theme_use("clam") # Fallback para um tema conhecido
+
+    def confirm_save_all_modified_data_before_action(self) -> bool:
+        """
+        Confirma com o usuário para salvar dados não salvos antes de uma ação crítica.
+        Retorna True se o usuário prosseguir (salvando ou descartando), False se cancelar.
+        """
         if self.daily_entry_tab_instance.get_data_modified_status():
             response = messagebox.askyesnocancel(
                 "Dados Não Salvos",
-                "Você tem dados não salvos. Deseja salvar antes de carregar outra data?"
+                "Você tem dados não salvos. Deseja salvar antes de prosseguir?"
             )
             if response is True:
                 self.daily_entry_tab_instance.save_day()
-                if self.daily_entry_tab_instance.get_data_modified_status():
-                    return
+                # Verificar novamente o status de modificado após a tentativa de salvar
+                return not self.daily_entry_tab_instance.get_data_modified_status()
             elif response is False:
                 self.daily_entry_tab_instance.set_data_modified_status(False)
+                return True
             else:
-                return
-        self.daily_entry_tab_instance.load_day_data(date_iso)
+                return False # Usuário cancelou
+        return True # Não há dados modificados, pode prosseguir
+
+    def load_day_data_with_confirmation(self, date_iso: str):
+        if self.confirm_save_all_modified_data_before_action():
+            self.daily_entry_tab_instance.load_day_data(date_iso)
+
 
     def ask_quit(self):
         if self.daily_entry_tab_instance.get_data_modified_status():
