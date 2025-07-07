@@ -18,6 +18,7 @@ class Database:
               glicemia REAL,
               lispro REAL,
               bolus REAL,
+              observations TEXT,
               PRIMARY KEY (date, meal)
             )
             """
@@ -37,13 +38,14 @@ class Database:
     def upsert_entry(self, date: str, meal: str, values: dict):
         self.conn.execute(
             """
-            INSERT INTO entries (date, meal, carbs, glicemia, lispro, bolus)
-            VALUES (:date, :meal, :carbs, :glicemia, :lispro, :bolus)
+            INSERT INTO entries (date, meal, carbs, glicemia, lispro, bolus, observations)
+            VALUES (:date, :meal, :carbs, :glicemia, :lispro, :bolus, :observations)
             ON CONFLICT(date, meal) DO UPDATE SET
               carbs=excluded.carbs,
               glicemia=excluded.glicemia,
               lispro=excluded.lispro,
-              bolus=excluded.bolus
+              bolus=excluded.bolus,
+              observations=excluded.observations
             """,
             {"date": date, "meal": meal, **values},
         )
@@ -64,7 +66,7 @@ class Database:
     def fetch_entry(self, date: str, meal: str):
         cur = self.conn.execute(
             """
-            SELECT carbs, glicemia, lispro, bolus
+            SELECT carbs, glicemia, lispro, bolus, observations
             FROM entries
             WHERE date = ? AND meal = ?
             """,
@@ -85,7 +87,7 @@ class Database:
     def fetch_range(self, start: str, end: str):
         cur = self.conn.execute(
             """
-            SELECT date, meal, carbs, glicemia, lispro, bolus
+            SELECT date, meal, carbs, glicemia, lispro, bolus, observations
             FROM entries
             WHERE date BETWEEN ? AND ?
             ORDER BY date, meal
